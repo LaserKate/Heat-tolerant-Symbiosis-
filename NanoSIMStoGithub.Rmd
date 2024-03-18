@@ -1,0 +1,1275 @@
+#0 Common script
+#1 PAM data (graph)
+    #1.1 Graph FvFm Figure2C
+    #1.2 Stats
+       #1.2.1 FvFm (over all experiment)
+#2 GROWTH data (graph and stats)
+    #2.1 Percentage change in Area
+      #2.1.1 Graph
+      #2.1.2 Stats  
+         #2.1.2.1 Single Lm and use the contrast matrix to test the differences
+    #2.2 TO growth 
+       #2.2.1 Graph
+       #2.2.2 Stats  
+          #2.2.2.1 Single Lm and use the contrast matrix to test the differences. KEEPER
+#3 Survivorship  (graph and stats)   
+    #3.1.1 Percentage survivorship graph
+    #3.2 Percentage survivorship stats
+#4 Respiration
+    #4.1 Bar graph
+    #4.2 Stats 
+#5 Cell densities
+    #5.1 Bar graph Cell densities per mm2
+        #5.1.1 Linear model T00
+        #5.1.2 Linear model T33
+    #5.2 Bar graph Propor Change in Cell densities per mm2
+        #5.2.1 Linear model
+    #5.3 Propor Change in Cell densities per mm2 per time point within culture and temp change 
+        #5.3.1 Bar graph  
+        #5.3.2 Linear model
+        
+
+
+
+
+
+
+
+
+# 0 Common script  
+```{r}
+NanoSIMSAll<-read.csv("NanoSIMS.csv",header=T,strip.white=TRUE)
+head(NanoSIMSAll)
+
+
+NanoSIMSAll$Temperature<-as.factor(NanoSIMSAll$Temperature)
+NanoSIMSAll$Disk<-as.factor(NanoSIMSAll$Disk)
+NanoSIMSAll$JuvID<-as.factor(NanoSIMSAll$JuvID)
+NanoSIMSAll$DayAsFactor<-NanoSIMSAll$Day #add a column with Day as factor
+NanoSIMSAll$DayAsFactor<-as.factor(NanoSIMSAll$DayAsFactor)
+
+
+head(NanoSIMSAll)
+```
+
+Filter data to keep just day 00 and remove clusters
+
+```{r}
+library(dplyr)
+T00NanoSIMS=filter(NanoSIMSAll,Day==00&Dead=="no")%>% droplevels()
+str(T00NanoSIMS)
+head(T00NanoSIMS)
+tail(T00NanoSIMS)
+```
+
+Filter data to keep just day 33 and remove clusters
+```{r}
+library(dplyr)
+T33NanoSIMS=filter(NanoSIMSAll,Day==33&Dead=="no")%>% droplevels() 
+str(T33NanoSIMS)
+str(T33NanoSIMS$Day) # to double check that we only keep day 33
+str(T33NanoSIMS$Dead) #to double check that we only keep the live ones and no clusters or dead ones
+head(T33NanoSIMS)
+tail(T33NanoSIMS)
+```
+
+Filter data to keep just day 0 and 33 and remove clusters
+```{r}
+library(dplyr)
+T0033NanoSIMS=filter(NanoSIMSAll,Day%in% c('0','33') &Dead=="no")%>% droplevels() 
+str(T0033NanoSIMS)
+str(T0033NanoSIMS$Day) # to double check that we only keep day 33 and 0
+str(T0033NanoSIMS$Dead) #to double check that we only keep the live ones and no clusters or dead ones
+head(T0033NanoSIMS)
+tail(T0033NanoSIMS)
+```
+
+
+# Summary function
+```{r}
+summarySE <- function(data=NULL, measurevar, groupvars=NULL, na.rm=FALSE,
+                      conf.interval=.95, .drop=TRUE) {
+  require(plyr)
+  
+  
+  # New version of length which can handle NA's: if na.rm==T, don't count them
+  length2 <- function (x, na.rm=FALSE) {
+    if (na.rm) sum(!is.na(x))
+    else       length(x)
+  }
+  
+  # This does the summary. For each group's data frame, return a vector with
+  # N, mean, and sd
+  datac <- ddply(data, groupvars, .drop=.drop,
+                 .fun = function(xx, col) {
+                   c(N    = length2(xx[[col]], na.rm=na.rm),
+                     mean = mean   (xx[[col]], na.rm=na.rm),
+                     sd   = sd     (xx[[col]], na.rm=na.rm)
+                   )
+                 },
+                 measurevar
+  )
+  
+  # Rename the "mean" column    
+  datac <- rename(datac, c("mean" = measurevar))
+  
+  datac$se <- datac$sd / sqrt(datac$N)  # Calculate standard error of the mean
+  
+  # Confidence interval multiplier for standard error
+  # Calculate t-statistic for confidence interval: 
+  # e.g., if conf.interval is .95, use .975 (above/below), and use df=N-1
+  ciMult <- qt(conf.interval/2 + .5, datac$N-1)
+  datac$ci <- datac$se * ciMult
+  
+  return(datac)
+}
+```
+
+
+
+# 1 PAM data (Graph)
+
+Filter data to remove those values with F<0.1
+```{r}
+library(dplyr)
+PAMNanoSIMS=filter(NanoSIMSAll,F>0.1 & F<0.3)
+head(PAMNanoSIMS)
+```
+
+Filter data to remove those values from T0 for FvFm percentage change
+```{r}
+library(dplyr)
+PAMNanoSIMSNoT0=filter(PAMNanoSIMS,Day>0)%>% droplevels() 
+str(PAMNanoSIMSNoT0)
+head(PAMNanoSIMSNoT0)
+```
+
+Create and Save Summary
+```{r}
+summaryfvfm<-summarySE(PAMNanoSIMS, measurevar="FvFm", groupvars=c("Day","Culture","Temperature","Treatment"),na.rm=TRUE,conf.interval=0.95)
+summaryfvfm
+
+summaryfvfmPerTemperature<-summarySE(PAMNanoSIMS, measurevar="FvFm", groupvars=c("Culture","Temperature","Treatment"),na.rm=TRUE,conf.interval=0.95)
+summaryfvfmPerTemperature
+
+summaryfvfmchange<-summarySE(PAMNanoSIMS, measurevar="FvFmPercentageChange", groupvars=c("Day","Culture","Temperature","Treatment"),na.rm=TRUE,conf.interval=0.95)
+summaryfvfmchange
+
+```
+
+#1.1 Graph FvFm Figure2C
+```{r}
+library(ggplot2)
+summaryfvfm$Culture=factor(summaryfvfm$Culture,levels=c("WT10","SS01","SS08"), labels = c("WT10","SS1","SS8")) #change the order of the factors so that they show in the graph in the desired order
+
+Figure2C_NanoSIMSFvFmGraph=ggplot(summaryfvfm, aes(y=FvFm, x=Day, color=Culture))+
+            facet_grid(Temperature~.)+
+            geom_line(aes(colour=Culture))+
+            scale_colour_manual(values=c("#A4D3CC","#CE9884","#871719"))+
+            geom_ribbon(aes(ymin=FvFm-se, ymax=FvFm+se),position=position_dodge(0.01),fill = "grey90",alpha = 0.3) +
+            geom_point(size=1)+
+            scale_y_continuous (expression("Fv/Fm"))+ 
+            scale_x_continuous(breaks=0:33*3)+
+            theme_bw()
+Figure2C_NanoSIMSFvFmGraph
+
+
+```
+
+
+#1.2 Stats
+   #1.2.1 FvFm (over all experiment)
+```{r}
+library(nlme)
+library(lme4)
+head(PAMNanoSIMS)
+str(PAMNanoSIMS$Disk)
+NanoSIMSPAM.lme1<-lme(FvFm~Treatment,random = ~1|Disk, data=PAMNanoSIMS, method="REML")
+NanoSIMSPAM.lme2<-lme(FvFm~Treatment*Day,random = ~1|Disk, data=PAMNanoSIMS, method="REML")
+NanoSIMSPAM.lme3<-lme(FvFm~Treatment*Day,random = ~1|Disk/JuvID, data=PAMNanoSIMS, method="REML")
+NanoSIMSPAM.lme4<-lme(FvFm~Treatment*Day,random = ~1|Disk/JuvID, correlation=corCompSymm(form=~Day|Disk/JuvID),data=PAMNanoSIMS, method="REML")
+NanoSIMSPAM.lme5<-lme(FvFm~Temperature*Culture*Day,random = ~1|Disk, data=PAMNanoSIMS, method="REML")
+NanoSIMSPAM.lme6<-lme(FvFm~Temperature*Culture*Day,random = ~1|Disk/JuvID, data=PAMNanoSIMS, method="REML")
+NanoSIMSPAM.lme7<-lme(FvFm~Temperature*Culture*Day,random = ~1|Disk/JuvID, correlation=corCompSymm(form=~Day|Disk/JuvID), data=PAMNanoSIMS, method="REML")
+```
+
+model selection using AIC
+```{r}
+library(MuMIn)
+AIC(NanoSIMSPAM.lme1) #-8821.237
+AIC(NanoSIMSPAM.lme2) #-9028.797
+AIC(NanoSIMSPAM.lme3) #-10188.3  
+AIC(NanoSIMSPAM.lme4) #-10186.3
+AIC(NanoSIMSPAM.lme5) #-9028.797
+AIC(NanoSIMSPAM.lme6) #-10188.3  Therefore this is the best model
+AIC(NanoSIMSPAM.lme7) #-10186.3
+
+```
+
+model validation
+```{r}
+plot(NanoSIMSPAM.lme6) #no wedge shape
+qqnorm(resid(NanoSIMSPAM.lme6))+qqline(resid(NanoSIMSPAM.lme6)) # the second graph
+```
+#contrast matrix
+
+```{r}
+ModelForContrast<-lm(FvFm~Temperature*Culture*Day, data=PAMNanoSIMS)
+#contrast matrix
+library(contrast)
+
+   a1=contrast(ModelForContrast, 
+           a=list(Temperature='27',Culture='SS01',Day=unique(PAMNanoSIMS$Day)), 
+           b=list(Temperature='27',Culture='SS08',Day=unique(PAMNanoSIMS$Day))
+   ) 
+
+   a1Mean=t(as.matrix(colMeans(a1$X))) #calculate the mean 
+
+   b1=contrast(ModelForContrast, 
+           a=list(Temperature='27',Culture='SS01',Day=unique(PAMNanoSIMS$Day)), 
+           b=list(Temperature='27',Culture='WT10',Day=unique(PAMNanoSIMS$Day))
+   ) 
+
+   b1Mean=t(as.matrix(colMeans(b1$X))) #calculate the mean 
+
+   c1=contrast(ModelForContrast, 
+           a=list(Temperature='27',Culture='SS08',Day=unique(PAMNanoSIMS$Day)), 
+           b=list(Temperature='27',Culture='WT10',Day=unique(PAMNanoSIMS$Day))
+   ) 
+
+   c1Mean=t(as.matrix(colMeans(c1$X))) #calculate the mean 
+
+   
+   d1=contrast(ModelForContrast, 
+           a=list(Temperature='27',Culture='SS01',Day=unique(PAMNanoSIMS$Day)), 
+           b=list(Temperature='31',Culture='SS01',Day=unique(PAMNanoSIMS$Day))
+   ) 
+
+   d1Mean=t(as.matrix(colMeans(d1$X))) #calculate the mean 
+
+   e1=contrast(ModelForContrast, 
+           a=list(Temperature='27',Culture='SS08',Day=unique(PAMNanoSIMS$Day)), 
+           b=list(Temperature='31',Culture='SS08',Day=unique(PAMNanoSIMS$Day))
+   ) 
+
+   e1Mean=t(as.matrix(colMeans(e1$X))) #calculate the mean 
+
+   f1=contrast(ModelForContrast, 
+           a=list(Temperature='27',Culture='WT10',Day=unique(PAMNanoSIMS$Day)), 
+           b=list(Temperature='31',Culture='WT10',Day=unique(PAMNanoSIMS$Day))
+   ) 
+
+   f1Mean=t(as.matrix(colMeans(f1$X))) #calculate the mean 
+
+   
+   g1=contrast(ModelForContrast, 
+           a=list(Temperature='31',Culture='SS01',Day=unique(PAMNanoSIMS$Day)), 
+           b=list(Temperature='31',Culture='SS08',Day=unique(PAMNanoSIMS$Day))
+   ) 
+
+   g1Mean=t(as.matrix(colMeans(g1$X))) #calculate the mean 
+
+   h1=contrast(ModelForContrast, 
+           a=list(Temperature='31',Culture='SS01',Day=unique(PAMNanoSIMS$Day)), 
+           b=list(Temperature='31',Culture='WT10',Day=unique(PAMNanoSIMS$Day))
+   ) 
+
+   h1Mean=t(as.matrix(colMeans(h1$X))) #calculate the mean 
+
+   i1=contrast(ModelForContrast, 
+           a=list(Temperature='31',Culture='SS08',Day=unique(PAMNanoSIMS$Day)), 
+           b=list(Temperature='31',Culture='WT10',Day=unique(PAMNanoSIMS$Day))
+   ) 
+
+   i1Mean=t(as.matrix(colMeans(i1$X))) #calculate the mean 
+
+   
+   
+   FvFmMatrixTry1=rbind(a1Mean,b1Mean,c1Mean,d1Mean,e1Mean,f1Mean,g1Mean,h1Mean,i1Mean) #create the matrix
+   FvFmMatrixTry1
+
+#run the contrast matrix in the model
+library(multcomp)
+t <- glht(NanoSIMSPAM.lme6, linfct = FvFmMatrixTry1)
+t
+summary(t) 
+```
+
+
+
+#2 GROWTH data (graph and stats)
+  #2.1 Percentage change in Area
+        2.1.1 Graphs
+  
+Look at the data from day 33
+```{r}
+str(T33NanoSIMS)
+str(T33NanoSIMS$Day) # to double check that we only keep day 33
+str(T33NanoSIMS$Dead) #to double check that we only keep the live ones and no clusters or dead ones
+head(T33NanoSIMS)
+tail(T33NanoSIMS)
+```
+
+
+
+Create and Save Summary
+```{r}
+summaryPropGrowthArea<-summarySE(T33NanoSIMS, measurevar="Area_mm2_PercentageChange", groupvars=c("Culture","Temperature","Treatment"),na.rm=TRUE,conf.interval=0.95)
+summaryPropGrowthArea
+
+
+write.csv(summaryPropGrowthArea,"summaryPropGrowthArea.csv")
+summaryPropGrowthArea
+
+```
+
+
+
+#bar graph 
+```{r}
+library(ggplot2)
+summaryPropGrowthArea$Culture=factor(summaryPropGrowthArea$Culture,levels=c("WT10","SS01","SS08"), labels = c("WT10","SS1","SS8"))#change the order of the factors so that they show in the graph in the desired order
+
+Figure4B_PropGrowthArea=ggplot(summaryPropGrowthArea, aes(x=Temperature, y=Area_mm2_PercentageChange,fill=Culture))+
+          scale_fill_manual(values=c("#A4D3CC","#CE9884","#871719"))+
+          geom_bar(stat="identity", position=position_dodge(.9))+
+          geom_errorbar(aes(ymin=Area_mm2_PercentageChange-se, ymax=Area_mm2_PercentageChange+se),position=position_dodge(.9),width=0.3)+
+          scale_y_continuous (expression("T"[33]~" Percentage Change Area (%)"))+
+          scale_x_discrete('Temperature')+
+          theme_bw()
+Figure4B_PropGrowthArea
+```
+
+
+   #2.1.2 Stats
+
+      #2.1.2.1 Single Lm and use the contrast matrix to test the differences
+
+```{r}
+library(dplyr)
+NanoSIMSAllDeadNoDay33=filter(NanoSIMSAll,Dead=="no" & Day==33)%>% droplevels() 
+head(NanoSIMSAllDeadNoDay33)
+str(NanoSIMSAllDeadNoDay33)#to make sure we only keep the live ones
+
+
+
+ChangeArea.lm1=lm(Area_mm2_PercentageChange~Culture*Temperature,data=NanoSIMSAllDeadNoDay33)
+par(mfrow=c(2,3))
+plot(ChangeArea.lm1,which=1:6)
+summary(ChangeArea.lm1)
+
+
+```
+
+```{r}
+#contrast matrix
+library(contrast)
+   a=contrast(ChangeArea.lm1, 
+           a=list(Temperature='27',Culture='SS01'), 
+           b=list(Temperature='27',Culture='SS08')
+   ) 
+   str (a) # the matrix is in $ X : num [1, 1:12] as a$X
+
+   b=contrast(ChangeArea.lm1, 
+           a=list(Temperature='27',Culture='SS08'), 
+           b=list(Temperature='27',Culture='WT10')
+   ) 
+   str (b) # the matrix is in $ X  : num [1, 1:12]  as b$X
+   
+   c=contrast(ChangeArea.lm1, 
+           a=list(Temperature='27',Culture='SS01'), 
+           b=list(Temperature='27',Culture='WT10')
+   ) 
+   str (c) # the matrix is in the $ X : num [1, 1:12]  as b$X
+   
+   d=contrast(ChangeArea.lm1, 
+           a=list(Temperature='31',Culture='SS01'), 
+           b=list(Temperature='31',Culture='SS08')
+   ) 
+   str (d)
+   
+   e=contrast(ChangeArea.lm1, 
+           a=list(Temperature='31',Culture='SS08'), 
+           b=list(Temperature='31',Culture='WT10')
+   ) 
+   str (e)
+   
+   f=contrast(ChangeArea.lm1, 
+           a=list(Temperature='31',Culture='SS01'), 
+           b=list(Temperature='31',Culture='WT10')
+   ) 
+   str (f)
+   
+   
+   ChangeAreaMatrixTry1=rbind(a$X,b$X,c$X,d$X,e$X,f$X) #create the matrix
+   ChangeAreaMatrixTry1
+
+#run the contrast matrix in the model
+library(multcomp)
+t <- glht(ChangeArea.lm1, linfct = ChangeAreaMatrixTry1)
+t
+summary(t) 
+```
+ 
+
+
+
+#2.2 TO growth
+
+ #2.2.1 Graphs
+
+Look at the data from day 00 
+```{r}
+str(T00NanoSIMS)
+head(T00NanoSIMS)
+tail(T00NanoSIMS)
+```
+
+Create and Save Summary
+```{r}
+summaryAreaTO<-summarySE(T00NanoSIMS, measurevar="Area_mm2", groupvars=c("Culture"),na.rm=TRUE,conf.interval=0.95)
+summaryAreaTO
+
+library(xlsx)
+write.csv(summaryAreaTO,"summaryAreaTO.csv")
+
+summaryAreaTO
+
+```
+
+`
+#bar graph 
+```{r}
+library(ggplot2)
+summaryAreaTO$Culture=factor(summaryAreaTO$Culture,levels=c("WT10","SS01","SS08"), labels = c("WT10","SS1","SS8"))#change the order of the factors so that they show in the graph in the desired order
+Figure1_AreaTO=ggplot(summaryAreaTO, aes(x=Culture, y=Area_mm2,fill=Culture))+
+          scale_fill_manual(values=c("#A4D3CC","#CE9884","#871719"))+        
+          geom_bar(stat="identity", position=position_dodge(.9))+
+          geom_errorbar(aes(ymin=Area_mm2-se, ymax=Area_mm2+se),position=position_dodge(.9),width=0.3)+
+          scale_y_continuous (expression("T"[0]~ "Area (mm"^2~")"))+
+          scale_x_discrete('Culture')+        
+          theme_bw()
+  
+Figure1_AreaTO
+```
+
+#2.2.2 Stats
+
+     #2.1.2.1 Single Lm and use the contrast matrix to test the differences 
+         #find and fit the model
+```{r}
+head(T00NanoSIMS)
+str(T00NanoSIMS)
+
+Area.lm1=lm(Area_mm2~Culture,data=T00NanoSIMS)
+par(mfrow=c(2,3))
+plot(ChangeArea.lm1,which=1:6) #Meet the asumptions. No wedge shape in the residuals vs fitted and the QQ plot almost follow the straight line
+```
+#contrast matrix
+```{r}
+#contrast matrix for the third model
+library(contrast)
+   a=contrast(Area.lm1, 
+           a=list(Culture='SS01'), 
+           b=list(Culture='SS08')
+   ) 
+   str (a) # the matrix is in $ X : num [1, 1:12] as a$X
+
+   b=contrast(Area.lm1, 
+           a=list(Culture='SS08'), 
+           b=list(Culture='WT10')
+   ) 
+   str (b) # the matrix is in $ X  : num [1, 1:12]  as b$X
+   
+   c=contrast(Area.lm1, 
+           a=list(Culture='SS01'), 
+           b=list(Culture='WT10')
+   ) 
+   
+   AreaMatrixT0=rbind(a$X,b$X,c$X) #create the matrix
+   AreaMatrixT0
+
+#run the contrast matrix in the model
+library(multcomp)
+t <- glht(Area.lm1, linfct = AreaMatrixT0)
+t
+summary(t) 
+```
+
+
+
+
+#3 Survivorship (graph and stats)
+
+```{r}
+NanoSIMSPercentSurvivorship<-read.csv("NanoSIMSSurvivorship.csv",header=T,strip.white=TRUE)
+head(NanoSIMSPercentSurvivorship)
+
+
+NanoSIMSPercentSurvivorship$Temperature<-as.factor(NanoSIMSPercentSurvivorship$Temperature)
+NanoSIMSPercentSurvivorship$Disk<-as.factor(NanoSIMSPercentSurvivorship$Disk)
+
+head(NanoSIMSPercentSurvivorship)
+```
+
+
+# Summary function
+```{r}
+summarySE <- function(data=NULL, measurevar, groupvars=NULL, na.rm=FALSE,
+                      conf.interval=.95, .drop=TRUE) {
+  require(plyr)
+  
+  
+  # New version of length which can handle NA's: if na.rm==T, don't count them
+  length2 <- function (x, na.rm=FALSE) {
+    if (na.rm) sum(!is.na(x))
+    else       length(x)
+  }
+  
+  # This does the summary. For each group's data frame, return a vector with
+  # N, mean, and sd
+  datac <- ddply(data, groupvars, .drop=.drop,
+                 .fun = function(xx, col) {
+                   c(N    = length2(xx[[col]], na.rm=na.rm),
+                     mean = mean   (xx[[col]], na.rm=na.rm),
+                     sd   = sd     (xx[[col]], na.rm=na.rm)
+                   )
+                 },
+                 measurevar
+  )
+  
+  # Rename the "mean" column    
+  datac <- rename(datac, c("mean" = measurevar))
+  
+  datac$se <- datac$sd / sqrt(datac$N)  # Calculate standard error of the mean
+  
+  # Confidence interval multiplier for standard error
+  # Calculate t-statistic for confidence interval: 
+  # e.g., if conf.interval is .95, use .975 (above/below), and use df=N-1
+  ciMult <- qt(conf.interval/2 + .5, datac$N-1)
+  datac$ci <- datac$se * ciMult
+  
+  return(datac)
+}
+```
+
+    #3.1.1 Percentage survivorship graph
+
+
+Create and Save Summary
+```{r}
+head(NanoSIMSPercentSurvivorship)
+summaryNanoPercentSurvivorship<-summarySE(NanoSIMSPercentSurvivorship, measurevar="PercentSurvivorship", groupvars=c("Culture","Temperature"),na.rm=TRUE,conf.interval=0.95)
+summaryNanoPercentSurvivorship
+```
+
+#bar graph 
+```{r}
+
+library(ggplot2)
+summaryNanoPercentSurvivorship$Culture=factor(summaryNanoPercentSurvivorship$Culture,levels=c("WT10","SS01","SS08"), labels = c("WT10","SS1","SS8"))#change the order of the factors so that they show in the graph in the desired order
+
+Figure4A_PercentSurvivorship=ggplot(summaryNanoPercentSurvivorship, aes(x=Temperature, y=PercentSurvivorship,fill=Culture))+
+          scale_fill_manual(values=c("#A4D3CC","#CE9884","#871719"))+
+          geom_bar(stat="identity", position=position_dodge(.9))+
+          geom_errorbar(aes(ymin=PercentSurvivorship-se, ymax=PercentSurvivorship+se),position=position_dodge(.9),width=0.3)+
+          scale_y_continuous (expression("(T"[33]~") Percentage Survivorship (%)"))+
+          scale_x_discrete('Temperature')+
+          theme_bw()
+Figure4A_PercentSurvivorship
+```
+    #3.2 Percentage survivorship stats
+    
+```{r}
+head(NanoSIMSPercentSurvivorship)
+str(NanoSIMSPercentSurvivorship)
+
+PercentSurvivorship.lm1=lm(PercentSurvivorship~Culture*Temperature,data=NanoSIMSPercentSurvivorship)
+par(mfrow=c(2,3))
+plot(PercentSurvivorship.lm1,which=1:6)
+summary(PercentSurvivorship.lm1)
+
+
+```
+
+```{r}
+#contrast matrix
+library(contrast)
+   a=contrast(PercentSurvivorship.lm1, 
+           a=list(Temperature='27',Culture='SS01'), 
+           b=list(Temperature='27',Culture='SS08')
+   ) 
+   str (a) # the matrix is in $ X : num [1, 1:12] as a$X
+
+   b=contrast(PercentSurvivorship.lm1, 
+           a=list(Temperature='27',Culture='SS08'), 
+           b=list(Temperature='27',Culture='WT10')
+   ) 
+   str (b) # the matrix is in $ X  : num [1, 1:12]  as b$X
+   
+   c=contrast(PercentSurvivorship.lm1, 
+           a=list(Temperature='27',Culture='SS01'), 
+           b=list(Temperature='27',Culture='WT10')
+   ) 
+   str (c) # the matrix is in the $ X : num [1, 1:12]  as b$X
+   
+   d=contrast(PercentSurvivorship.lm1, 
+           a=list(Temperature='31',Culture='SS01'), 
+           b=list(Temperature='31',Culture='SS08')
+   ) 
+   str (d)
+   
+   e=contrast(PercentSurvivorship.lm1, 
+           a=list(Temperature='31',Culture='SS08'), 
+           b=list(Temperature='31',Culture='WT10')
+   ) 
+   str (e)
+   
+   f=contrast(PercentSurvivorship.lm1, 
+           a=list(Temperature='31',Culture='SS01'), 
+           b=list(Temperature='31',Culture='WT10')
+   ) 
+   str (f)
+   
+   
+   PercentSurvMatrixTry1=rbind(a$X,b$X,c$X,d$X,e$X,f$X) #create the matrix
+   PercentSurvMatrixTry1
+
+#run the contrast matrix in the model
+library(multcomp)
+t <- glht(PercentSurvivorship.lm1, linfct = PercentSurvMatrixTry1)
+t
+summary(t) 
+```    
+    
+
+
+#4 RESPIRATION
+
+Filter data to keep just T00 and T33
+```{r}
+library(dplyr)
+head(NanoSIMSAll)
+
+RespNanoSIMS=filter(NanoSIMSAll,DayAsFactor=='0' | DayAsFactor=='33')%>% droplevels() 
+str(RespNanoSIMS)
+
+RespNanoSIMST00=filter(RespNanoSIMS,DayAsFactor=='0')%>% droplevels()
+str(RespNanoSIMST00)
+
+RespNanoSIMST33=filter(RespNanoSIMS,DayAsFactor=='33')%>% droplevels()
+str(RespNanoSIMST00)
+
+RespNanoSS01=filter(RespNanoSIMS,Culture=='SS01')%>% droplevels()
+str(RespNanoSS01)
+
+RespNanoSS08=filter(RespNanoSIMS,Culture=='SS08')%>% droplevels()
+str(RespNanoSS08)
+```
+
+
+Create and Save Summary
+```{r}
+summaryRespPerMM2<-summarySE(RespNanoSIMS, measurevar="RespirationPerMM2", groupvars=c("DayAsFactor","Treatment","Culture","Temperature"),na.rm=TRUE,conf.interval=0.95)
+summaryRespPerMM2 #this will produce NaN because we didn't do one of the treatments WT10@27C
+```
+#4.1 bar graph 
+
+```{r}
+library(ggplot2)
+summaryRespPerMM2$Culture=factor(summaryRespPerMM2$Culture,levels=c("WT10","SS01","SS08"), labels = c("WT10","SS1","SS8"))#change the order of the factors so that they show in the graph in the desired order
+
+Figure3_RespirationPerMM2=ggplot(summaryRespPerMM2, aes(x=Temperature, y=RespirationPerMM2,fill=Culture))+
+          scale_fill_manual(values=c("#A4D3CC","#CE9884","#871719"))+
+          geom_bar(stat="identity", position=position_dodge(.9))+
+          facet_grid(.~DayAsFactor,scale="free")+
+          geom_errorbar(aes(ymin=RespirationPerMM2-se, ymax=RespirationPerMM2+se), position=position_dodge(.9),width=0.3)+
+          scale_y_continuous (expression("O"[2]~"(mg h"^-1~"mm"^-2~")")) +
+          scale_x_discrete('Temperature')+
+          theme_bw()
+
+Figure3_RespirationPerMM2
+```
+#4.2 Stats
+Look at the data of day 00 
+```{r}
+str(T00NanoSIMS)
+head(T00NanoSIMS)
+tail(T00NanoSIMS)
+```
+```{r}
+library(dplyr)
+T00NanoSIMS27=filter(T00NanoSIMS,Temperature=='27')%>% droplevels()
+T00NanoSIMS31=filter(T00NanoSIMS,Temperature=='31')%>% droplevels()
+T00NanoSS1SIMS=filter(T00NanoSIMS,Culture=='SS01')%>% droplevels()
+T00NanoSS8SIMS=filter(T00NanoSIMS,Culture=='SS08')%>% droplevels()
+
+str(T00NanoSIMS27)
+str(T00NanoSIMS31)
+str(T00NanoSS1SIMS)
+str(T00NanoSS8SIMS)
+```
+
+
+Linear model T00 and 27C
+```{r}
+Resp27CT00.lm1=lm(RespirationPerMM2~Culture,data=T00NanoSIMS27)
+par(mfrow=c(2,3))
+plot(Resp27CT00.lm1,which=1:6)
+summary(Resp27CT00.lm1)
+```
+Linear model T00 and 31C
+```{r}
+Resp31CT00.lm1=lm(RespirationPerMM2~Culture,data=T00NanoSIMS31)
+par(mfrow=c(2,3))
+plot(Resp31CT00.lm1,which=1:6)
+summary(Resp31CT00.lm1)
+```
+#contrast matrix
+
+   
+```{r}
+library(contrast)
+   a=contrast(Resp31CT00.lm1, 
+           a=list(Culture='SS01'), 
+           b=list(Culture='SS08')
+   ) 
+   str (a) # the matrix is in the $ X : num [1, 1:12]  as b$X
+   b=contrast(Resp31CT00.lm1, 
+           a=list(Culture='SS01'), 
+           b=list(Culture='WT10')
+   ) 
+   str (b) # the matrix is in the $ X : num [1, 1:12]  as b$X
+   c=contrast(Resp31CT00.lm1, 
+           a=list(Culture='SS08'), 
+           b=list(Culture='WT10')
+   ) 
+   str (c)
+   
+   Resp31CT00MatrixTry1=rbind(a$X,b$X,c$X) #create the matrix
+   Resp31CT00MatrixTry1
+
+#run the contrast matrix in the model
+library(multcomp)
+rt31T00 <- glht(Resp31CT00.lm1, linfct = Resp31CT00MatrixTry1)
+rt31T00
+summary(rt31T00) 
+```
+
+Linear model T00 and SS1
+```{r}
+RespSS1T00.lm1=lm(RespirationPerMM2~Temperature,data=T00NanoSS1SIMS)
+par(mfrow=c(2,3))
+plot(RespSS1T00.lm1,which=1:6)
+summary(RespSS1T00.lm1)
+```
+
+
+Linear model T00 and SS8
+```{r}
+RespSS8T00.lm1=lm(RespirationPerMM2~Temperature,data=T00NanoSS8SIMS)
+par(mfrow=c(2,3))
+plot(RespSS8T00.lm1,which=1:6)
+summary(RespSS8T00.lm1)
+```
+
+
+Linear model
+```{r}
+RespT33.lm1=lm(RespirationPerMM2~Culture*Temperature,data=T33NanoSIMS)
+par(mfrow=c(2,3))
+plot(RespT33.lm1,which=1:6)
+summary(RespT33.lm1)
+```
+
+
+```{r}
+#contrast matrix
+library(contrast)
+   a=contrast(RespT33.lm1, 
+           a=list(Temperature='27',Culture='SS01'), 
+           b=list(Temperature='27',Culture='SS08')
+   ) 
+   str (a) # the matrix is in $ X : num [1, 1:12] as a$X
+
+   b=contrast(RespT33.lm1, 
+           a=list(Temperature='27',Culture='SS01'), 
+           b=list(Temperature='27',Culture='WT10')
+   ) 
+   str (b) # the matrix is in $ X  : num [1, 1:12]  as b$X
+   
+   c=contrast(RespT33.lm1, 
+           a=list(Temperature='27',Culture='SS08'), 
+           b=list(Temperature='27',Culture='WT10')
+   ) 
+   str (c) # the matrix is in the $ X : num [1, 1:12]  as b$X
+   
+   d=contrast(RespT33.lm1, 
+           a=list(Temperature='27',Culture='SS01'), 
+           b=list(Temperature='31',Culture='SS01')
+   ) 
+   str (d)
+   
+   e=contrast(RespT33.lm1, 
+           a=list(Temperature='27',Culture='SS08'), 
+           b=list(Temperature='31',Culture='SS08')
+   ) 
+   str (e)
+   
+   f=contrast(RespT33.lm1, 
+           a=list(Temperature='27',Culture='WT10'), 
+           b=list(Temperature='31',Culture='WT10')
+   ) 
+   str (f)
+   g=contrast(RespT33.lm1, 
+           a=list(Temperature='31',Culture='SS01'), 
+           b=list(Temperature='31',Culture='SS08')
+   ) 
+   str (g) # the matrix is in $ X : num [1, 1:12] as a$X
+
+   h=contrast(RespT33.lm1, 
+           a=list(Temperature='31',Culture='SS01'), 
+           b=list(Temperature='31',Culture='WT10')
+   ) 
+   str (h) # the matrix is in $ X  : num [1, 1:12]  as b$X
+   
+   i=contrast(RespT33.lm1, 
+           a=list(Temperature='31',Culture='SS08'), 
+           b=list(Temperature='31',Culture='WT10')
+   ) 
+   str (i) # the matrix is in the $ X : num [1, 1:12]  as b$X
+ 
+   
+   RespT33MatrixTry1=rbind(a$X,b$X,c$X,d$X,e$X,f$X,g$X,h$X,i$X) #create the matrix
+   RespT33MatrixTry1
+
+#run the contrast matrix in the model
+library(multcomp)
+rt33 <- glht(RespT33.lm1, linfct = RespT33MatrixTry1)
+rt33
+summary(rt33) 
+```    
+
+
+Linear model 27C
+```{r}
+head(RespNanoSIMS)
+Resp.lm1=lm(RespirationPerMM2~Culture*DayAsFactor*Temperature,data=RespNanoSIMS)
+par(mfrow=c(2,3))
+plot(Resp.lm1,which=1:6)
+summary(Resp.lm1)
+```
+
+```{r}
+#contrast matrix
+str(RespNanoSIMS$DayAsFactor)
+str(RespNanoSIMS)
+library(contrast)
+   a=contrast(Resp.lm1, 
+           a=list(DayAsFactor="0",Temperature='27',Culture='SS01'), 
+           b=list(DayAsFactor="33",Temperature='27',Culture='SS01')
+   ) 
+   str (a) # the matrix is in $ X : num [1, 1:12] as a$X
+
+   b=contrast(Resp.lm1, 
+           a=list(DayAsFactor="0",Temperature='27',Culture='SS08'), 
+           b=list(DayAsFactor="33",Temperature='27',Culture='SS08')
+   ) 
+   str (b) # the matrix is in $ X  : num [1, 1:12]  as b$X
+   
+   
+   
+   Resp27CMatrixTry1=rbind(a$X,b$X) #create the matrix
+   Resp27CMatrixTry1
+
+#run the contrast matrix in the model
+library(multcomp)
+rt27C <- glht(Resp.lm1, linfct = Resp27CMatrixTry1)
+rt27C
+summary(rt27C) 
+```    
+
+#5 Cell densities 
+    #5.1 Bar graph Cell densities per mm2
+Create and Save Summary
+```{r}
+head(T0033NanoSIMS)
+summaryCellPerMM2<-summarySE(T0033NanoSIMS, measurevar="CellsPerMM2", groupvars=c("DayAsFactor","Culture","Temperature","Treatment"),na.rm=TRUE,conf.interval=0.95)
+summaryCellPerMM2
+```
+
+
+
+#bar graph 
+```{r}
+library(ggplot2)
+summaryCellPerMM2$Culture=factor(summaryCellPerMM2$Culture,levels=c("WT10","SS01","SS08"), labels = c("WT10","SS1","SS8"))#change the order of the factors so that they show in the graph in the desired order
+Figure2A_CellPerMM2Graph=ggplot(summaryCellPerMM2, aes(x=Temperature, y=CellsPerMM2,fill=Culture))+
+          scale_fill_manual(values=c("#A4D3CC","#CE9884","#871719"))+        
+          geom_bar(stat="identity", position=position_dodge(.9))+
+          facet_grid(.~DayAsFactor,scale="free")+
+          geom_errorbar(aes(ymin=CellsPerMM2-se, ymax=CellsPerMM2+se), position=position_dodge(.9),width=0.3)+
+          scale_y_continuous (expression("Cells mm"^-2))+
+          scale_x_discrete('Temperature')+
+          theme_bw()
+
+Figure2A_CellPerMM2Graph
+```
+
+        #5.1.1 Linear model T00
+
+```{r}
+head(T00NanoSIMS)
+str(T00NanoSIMS)
+
+T00CellPerMM2.lm1=lm(CellsPerMM2~Culture*Temperature,data=T00NanoSIMS)
+par(mfrow=c(2,3))
+plot(T00CellPerMM2.lm1,which=1:6)
+summary(T00CellPerMM2.lm1)
+```
+
+```{r}
+#contrast matrix
+library(contrast)
+   a=contrast(T00CellPerMM2.lm1, 
+           a=list(Temperature='27',Culture='SS01'), 
+           b=list(Temperature='27',Culture='SS08')
+   ) 
+   str (a) # the matrix is in $ X : num [1, 1:12] as a$X
+
+   b=contrast(T00CellPerMM2.lm1, 
+           a=list(Temperature='27',Culture='SS01'), 
+           b=list(Temperature='27',Culture='WT10')
+   ) 
+   str (b) # the matrix is in $ X  : num [1, 1:12]  as b$X
+   
+   c=contrast(T00CellPerMM2.lm1, 
+           a=list(Temperature='27',Culture='SS08'), 
+           b=list(Temperature='27',Culture='WT10')
+   ) 
+   str (c) # the matrix is in the $ X : num [1, 1:12]  as b$X
+   
+   d=contrast(T00CellPerMM2.lm1, 
+           a=list(Temperature='27',Culture='SS01'), 
+           b=list(Temperature='31',Culture='SS01')
+   ) 
+   str (d)
+   
+   e=contrast(T00CellPerMM2.lm1, 
+           a=list(Temperature='27',Culture='SS08'), 
+           b=list(Temperature='31',Culture='SS08')
+   ) 
+   str (e)
+   
+   f=contrast(T00CellPerMM2.lm1, 
+           a=list(Temperature='27',Culture='WT10'), 
+           b=list(Temperature='31',Culture='WT10')
+   ) 
+   str (f)
+   g=contrast(T00CellPerMM2.lm1, 
+           a=list(Temperature='31',Culture='SS01'), 
+           b=list(Temperature='31',Culture='SS08')
+   ) 
+   str (g) # the matrix is in $ X : num [1, 1:12] as a$X
+
+   h=contrast(T00CellPerMM2.lm1, 
+           a=list(Temperature='31',Culture='SS01'), 
+           b=list(Temperature='31',Culture='WT10')
+   ) 
+   str (h) # the matrix is in $ X  : num [1, 1:12]  as b$X
+   
+   i=contrast(T00CellPerMM2.lm1, 
+           a=list(Temperature='31',Culture='SS08'), 
+           b=list(Temperature='31',Culture='WT10')
+   ) 
+   str (i) # the matrix is in the $ X : num [1, 1:12]  as b$X
+ 
+   
+  T00CellPerMM2Try1=rbind(a$X,b$X,c$X,d$X,e$X,f$X,g$X,h$X,i$X) #create the matrix
+  T00CellPerMM2Try1
+
+#run the contrast matrix in the model
+library(multcomp)
+cellpermm2t00<- glht(T00CellPerMM2.lm1, linfct = T00CellPerMM2Try1)
+cellpermm2t00
+summary(cellpermm2t00) 
+```
+
+        #5.1.2 Linear model T33
+
+```{r}
+head(T33NanoSIMS)
+str(T33NanoSIMS)
+
+T33CellPerMM2.lm1=lm(CellsPerMM2~Culture*Temperature,data=T33NanoSIMS)
+par(mfrow=c(2,3))
+plot(T33CellPerMM2.lm1,which=1:6)
+summary(T33CellPerMM2.lm1)
+```
+
+```{r}
+#contrast matrix
+library(contrast)
+   a=contrast(T33CellPerMM2.lm1, 
+           a=list(Temperature='27',Culture='SS01'), 
+           b=list(Temperature='27',Culture='SS08')
+   ) 
+   str (a) # the matrix is in $ X : num [1, 1:12] as a$X
+
+   b=contrast(T33CellPerMM2.lm1, 
+           a=list(Temperature='27',Culture='SS01'), 
+           b=list(Temperature='27',Culture='WT10')
+   ) 
+   str (b) # the matrix is in $ X  : num [1, 1:12]  as b$X
+   
+   c=contrast(T33CellPerMM2.lm1, 
+           a=list(Temperature='27',Culture='SS08'), 
+           b=list(Temperature='27',Culture='WT10')
+   ) 
+   str (c) # the matrix is in the $ X : num [1, 1:12]  as b$X
+   
+   d=contrast(T33CellPerMM2.lm1, 
+           a=list(Temperature='27',Culture='SS01'), 
+           b=list(Temperature='31',Culture='SS01')
+   ) 
+   str (d)
+   
+   e=contrast(T33CellPerMM2.lm1, 
+           a=list(Temperature='27',Culture='SS08'), 
+           b=list(Temperature='31',Culture='SS08')
+   ) 
+   str (e)
+   
+   f=contrast(T33CellPerMM2.lm1, 
+           a=list(Temperature='27',Culture='WT10'), 
+           b=list(Temperature='31',Culture='WT10')
+   ) 
+   str (f)
+   g=contrast(T33CellPerMM2.lm1, 
+           a=list(Temperature='31',Culture='SS01'), 
+           b=list(Temperature='31',Culture='SS08')
+   ) 
+   str (g) # the matrix is in $ X : num [1, 1:12] as a$X
+
+   h=contrast(T33CellPerMM2.lm1, 
+           a=list(Temperature='31',Culture='SS01'), 
+           b=list(Temperature='31',Culture='WT10')
+   ) 
+   str (h) # the matrix is in $ X  : num [1, 1:12]  as b$X
+   
+   i=contrast(T33CellPerMM2.lm1, 
+           a=list(Temperature='31',Culture='SS08'), 
+           b=list(Temperature='31',Culture='WT10')
+   ) 
+   str (i) # the matrix is in the $ X : num [1, 1:12]  as b$X
+ 
+   
+  T33CellPerMM2Try1=rbind(a$X,b$X,c$X,d$X,e$X,f$X,g$X,h$X,i$X) #create the matrix
+  T33CellPerMM2Try1
+
+#run the contrast matrix in the model
+library(multcomp)
+cellpermm2t33<- glht(T33CellPerMM2.lm1, linfct = T33CellPerMM2Try1)
+cellpermm2t33
+summary(cellpermm2t33) 
+```
+
+
+   #5.2 Bar graph Propor Change in Cell densities per mm2
+Create and Save Summary
+```{r}
+head(T33NanoSIMS)
+summaryCellPerMM2PropChange<-summarySE(T33NanoSIMS, measurevar="CellDensityPerMM2PercentChange", groupvars=c("Culture","Temperature","Treatment"),na.rm=TRUE,conf.interval=0.95)
+summaryCellPerMM2PropChange
+```
+
+```{r}
+
+summaryCellPerMM2PropChange$Culture=factor(summaryCellPerMM2PropChange$Culture,levels=c("WT10","SS01","SS08"), labels = c("WT10","SS1","SS8"))#change the order of the factors so that they show in the graph in the desired order
+
+Figure2B1_CellPerMM2PropChange=ggplot(summaryCellPerMM2PropChange, aes(x=Temperature, y=CellDensityPerMM2PercentChange,fill=Culture))+
+          scale_fill_manual(values=c("#A4D3CC","#CE9884","#871719"))+
+          geom_bar(stat="identity", position=position_dodge(.9))+
+          geom_errorbar(aes(ymin=CellDensityPerMM2PercentChange-se, ymax=CellDensityPerMM2PercentChange+se),position=position_dodge(.9),width=0.3)+
+          scale_y_continuous (expression("(T"[33]~") Percentage of Change of "~"cells mm"^-2~"(%)"))+    
+          scale_x_discrete('Temperature')+
+          theme_bw()
+Figure2B1_CellPerMM2PropChange
+```
+
+      #5.2.1 Linear model
+  Linear model
+```{r}
+PropChangeCellsMM2.lm1=lm(CellDensityPerMM2PercentChange~Culture*Temperature,data=T33NanoSIMS)
+par(mfrow=c(2,3))
+plot(PropChangeCellsMM2.lm1,which=1:6)
+summary(PropChangeCellsMM2.lm1)
+```
+
+```{r}
+#contrast matrix
+library(contrast)
+   a=contrast(PropChangeCellsMM2.lm1, 
+           a=list(Temperature='27',Culture='SS01'), 
+           b=list(Temperature='27',Culture='SS08')
+   ) 
+   str (a) # the matrix is in $ X : num [1, 1:12] as a$X
+
+   b=contrast(PropChangeCellsMM2.lm1, 
+           a=list(Temperature='27',Culture='SS01'), 
+           b=list(Temperature='27',Culture='WT10')
+   ) 
+   str (b) # the matrix is in $ X  : num [1, 1:12]  as b$X
+   
+   c=contrast(PropChangeCellsMM2.lm1, 
+           a=list(Temperature='27',Culture='SS08'), 
+           b=list(Temperature='27',Culture='WT10')
+   ) 
+   str (c) # the matrix is in the $ X : num [1, 1:12]  as b$X
+   
+   d=contrast(PropChangeCellsMM2.lm1, 
+           a=list(Temperature='27',Culture='SS01'), 
+           b=list(Temperature='31',Culture='SS01')
+   ) 
+   str (d)
+   
+   e=contrast(PropChangeCellsMM2.lm1, 
+           a=list(Temperature='27',Culture='SS08'), 
+           b=list(Temperature='31',Culture='SS08')
+   ) 
+   str (e)
+   
+   f=contrast(PropChangeCellsMM2.lm1, 
+           a=list(Temperature='27',Culture='WT10'), 
+           b=list(Temperature='31',Culture='WT10')
+   ) 
+   str (f)
+   g=contrast(PropChangeCellsMM2.lm1, 
+           a=list(Temperature='31',Culture='SS01'), 
+           b=list(Temperature='31',Culture='SS08')
+   ) 
+   str (g) # the matrix is in $ X : num [1, 1:12] as a$X
+
+   h=contrast(PropChangeCellsMM2.lm1, 
+           a=list(Temperature='31',Culture='SS01'), 
+           b=list(Temperature='31',Culture='WT10')
+   ) 
+   str (h) # the matrix is in $ X  : num [1, 1:12]  as b$X
+   
+   i=contrast(PropChangeCellsMM2.lm1, 
+           a=list(Temperature='31',Culture='SS08'), 
+           b=list(Temperature='31',Culture='WT10')
+   ) 
+   str (i) # the matrix is in the $ X : num [1, 1:12]  as b$X
+ 
+   
+   PropChangeCellsMM2T33MatrixTry1=rbind(a$X,b$X,c$X,d$X,e$X,f$X,g$X,h$X,i$X) #create the matrix
+   PropChangeCellsMM2T33MatrixTry1
+
+#run the contrast matrix in the model
+library(multcomp)
+pchanget33 <- glht(PropChangeCellsMM2.lm1, linfct = PropChangeCellsMM2T33MatrixTry1)
+pchanget33
+summary(pchanget33) 
+```
+
+
+    #5.3 Propor Change in Cell densities per mm2 per time point within culture and temp change 
+        
+        
+        
+ summary       
+```{r}       
+head(T0033NanoSIMS)  
+summaryCellPerMM2PropChangePerTimePoint<-summarySE(T0033NanoSIMS, measurevar="CellDensityPerMM2PercentChangePerTimePointAndCulture", groupvars=c("DayAsFactor","Culture"),na.rm=TRUE,conf.interval=0.95)
+summaryCellPerMM2PropChangePerTimePoint
+```     
+        
+  #5.3.1 Bar graph       
+        
+```{r}
+head(NanoSIMSAll)
+summaryCellPerMM2PropChangePerTimePoint$Culture=factor(summaryCellPerMM2PropChangePerTimePoint$Culture,levels=c("WT10","SS01","SS08"), labels = c("WT10","SS1","SS8"))#change the order of the factors so that they show in the graph in the desired order
+
+Figure2B2_CellPerMM2PropChangePerTimePoint=ggplot(summaryCellPerMM2PropChangePerTimePoint, 
+                                                  aes(x=DayAsFactor, 
+                                                      y=CellDensityPerMM2PercentChangePerTimePointAndCulture,
+                                                      fill=Culture))+
+          scale_fill_manual(values=c("#A4D3CC","#CE9884","#871719"))+
+          geom_bar(stat="identity", position=position_dodge(.9))+
+          geom_errorbar(aes(ymin=CellDensityPerMM2PercentChangePerTimePointAndCulture-se,
+                            ymax=CellDensityPerMM2PercentChangePerTimePointAndCulture+se),
+                            position=position_dodge(.9),width=0.3)+
+          scale_y_continuous (expression("Percentage of Change in "~"cells mm"^-2~"After Temperature Increase(%)"))+    
+          scale_x_discrete('Day')+
+          theme_bw()
+Figure2B2_CellPerMM2PropChangePerTimePoint
+```
+
+      #5.3.2 Linear model
+  Linear model
+```{r}
+PropChangeInCellsMM2PerChangeInTempWithinCulture.lm1=lm(CellDensityPerMM2PercentChangePerTimePointAndCulture~Culture*DayAsFactor,data=T0033NanoSIMS)
+par(mfrow=c(2,3))
+plot(PropChangeInCellsMM2PerChangeInTempWithinCulture.lm1,which=1:6)
+summary(PropChangeInCellsMM2PerChangeInTempWithinCulture.lm1)
+```
+
+```{r}
+#contrast matrix
+library(contrast)
+   a=contrast(PropChangeInCellsMM2PerChangeInTempWithinCulture.lm1, 
+           a=list(DayAsFactor='0',Culture='WT10'), 
+           b=list(DayAsFactor='0',Culture='SS01')
+   ) 
+   str (a) # the matrix is in $ X : num [1, 1:12] as a$X
+
+   b=contrast(PropChangeInCellsMM2PerChangeInTempWithinCulture.lm1, 
+           a=list(DayAsFactor='0',Culture='WT10'), 
+           b=list(DayAsFactor='0',Culture='SS08')
+   ) 
+   str (b) # the matrix is in $ X  : num [1, 1:12]  as b$X
+   
+   c=contrast(PropChangeInCellsMM2PerChangeInTempWithinCulture.lm1, 
+           a=list(DayAsFactor='0',Culture='SS01'), 
+           b=list(DayAsFactor='0',Culture='SS08')
+   ) 
+   str (c) # the matrix is in the $ X : num [1, 1:12]  as b$X
+   
+   d=contrast(PropChangeInCellsMM2PerChangeInTempWithinCulture.lm1, 
+           a=list(DayAsFactor='33',Culture='WT10'), 
+           b=list(DayAsFactor='33',Culture='SS01')
+   ) 
+   str (d)
+   
+   e=contrast(PropChangeInCellsMM2PerChangeInTempWithinCulture.lm1, 
+           a=list(DayAsFactor='33',Culture='WT10'), 
+           b=list(DayAsFactor='33',Culture='SS08')
+   ) 
+   str (e)
+   
+   f=contrast(PropChangeInCellsMM2PerChangeInTempWithinCulture.lm1, 
+           a=list(DayAsFactor='33',Culture='SS01'), 
+           b=list(DayAsFactor='33',Culture='SS08')
+   ) 
+   str (f)
+   
+   PropChangeCellsMM2InTempWithinCultureMatrixTry1=rbind(a$X,b$X,c$X,d$X,e$X,f$X) #create the matrix
+   PropChangeCellsMM2InTempWithinCultureMatrixTry1
+
+#run the contrast matrix in the model
+library(multcomp)
+pchanget0And33 <- glht(PropChangeInCellsMM2PerChangeInTempWithinCulture.lm1, linfct = PropChangeCellsMM2InTempWithinCultureMatrixTry1)
+pchanget0And33
+summary(pchanget0And33) 
+```
+
+
+
+
+
+
+
+
+
+
